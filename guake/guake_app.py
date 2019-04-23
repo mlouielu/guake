@@ -1205,21 +1205,22 @@ class Guake(SimpleGladeApp):
 
         # Restore all tabs for all workspaces
         try:
+            BORROW_FROM = 1000000000
             for key, frames in config['workspace'].items():
-                nb = self.notebook_manager.get_notebook(int(key))
-                current_pages = nb.get_n_pages()
+                nb = self.notebook_manager.get_notebook(BORROW_FROM)
+                self.notebook_manager.replace_notebook(int(key), nb)
 
                 # Restore each frames' tabs from config
                 # NOTE: If frame implement in future, we will need to update this code
+                log.info('nb have this pages: %d', nb.get_n_pages())
                 for tabs in frames:
                     for index, tab in enumerate(tabs):
                         nb.new_page_with_focus(
                             tab['directory'], tab['label'], tab['custom_label_set']
                         )
-
-                    # Remove original pages in notebook
-                    for i in range(current_pages):
-                        nb.delete_page(0)
+                    nb.delete_page(0)
+                log.info('nb have this pages: %d', nb.get_n_pages())
+                self.notebook_manager.remove_notebook(BORROW_FROM)
         except KeyError:
             log.warning('%s schema is broken', session_file)
             shutil.copy(path, self.get_xdg_config_directory() / '{}.bak'.format(filename))
@@ -1238,6 +1239,9 @@ class Guake(SimpleGladeApp):
 
         # Reset auto save tabs
         self.settings.general.set_boolean('save-tabs-when-changed', v)
+
+        # Re-toggle the visible of Guake
+        self.show_hide()
 
         # Notify the user
         if (self.settings.general.get_boolean('restore-tabs-notify') and not suppress_notify):

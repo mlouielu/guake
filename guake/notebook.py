@@ -205,6 +205,7 @@ class TerminalNotebook(Gtk.Notebook):
 
     @save_tabs_when_changed
     def remove_page(self, page_num):
+        log.debug('Remove page index %s', page_num)
         super().remove_page(page_num)
         # focusing the first terminal on the previous page
         if self.get_current_page() > -1:
@@ -364,6 +365,23 @@ class NotebookManager(GObject.Object):
 
     def workspace_changed(self, screen, previous_workspace):
         self.set_workspace(self.screen.get_active_workspace().get_number())
+
+    def replace_notebook(self, workspace_index: int, nb):
+        prev_nb = self.get_notebook(workspace_index)
+        self.notebooks[workspace_index] = nb
+        self.set_workspace(workspace_index)
+        for i in range(prev_nb.get_n_pages()):
+            prev_nb.delete_page(0)
+        self.notebook_parent.remove(prev_nb)
+
+    def remove_notebook(self, workspace_index: int):
+        if not self.has_notebook_for_workspace(workspace_index):
+            return
+        nb = self.get_notebook(workspace_index)
+        for i in range(nb.get_n_pages()):
+            nb.delete_page(0)
+        self.notebook_parent.remove(nb)
+        del self.notebooks[workspace_index]
 
     def get_notebook(self, workspace_index: int):
         if not self.has_notebook_for_workspace(workspace_index):
