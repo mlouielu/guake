@@ -194,6 +194,7 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
     def set_last_terminal_focused(self, terminal):
         self.last_terminal_focused = terminal
         self.get_notebook().set_last_terminal_focused(terminal)
+        self.last_terminal_focused.connect('text-scrolled', self.search_highlight_all)
 
     def get_last_terminal_focused(self, terminal):
         return self.last_terminal_focused
@@ -233,7 +234,9 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
         if self.search_revealer.get_reveal_child():
             self.search_revealer.set_reveal_child(False)
             self.last_terminal_focused.grab_focus()
+            self.last_terminal_focused.e_unselect_all()
             self.last_terminal_focused.unselect_all()
+            self.reset_term_search(self.last_terminal_focused)
 
     def close_search_box(self, event):
         self.hide_search_box()
@@ -269,6 +272,7 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
                 self.search_prev = True
 
     def reset_term_search(self, term):
+        self.searchstring = ''
         term.search_set_gregex(GLib.Regex('', 0, 0), 0)
         term.search_find_next()
 
@@ -294,6 +298,31 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
             self.on_search_prev_clicked(None)
         else:
             self.on_search_next_clicked(None)
+
+        self.search_highlight_all()
+
+    def search_highlight_all(self, widget=None, user_data=None):
+        if not self.last_terminal_focused:
+            return
+        if not self.searchstring:
+            return
+
+        term = self.last_terminal_focused
+        text, attr = term.get_text()
+
+        lines = text.split('\n')
+        searchlen = len(self.searchstring)
+
+        term.e_unselect_all()
+        for row, line in enumerate(lines):
+            line = line.replace('\t', ' ' * 8)
+            if self.searchstring in line:
+                index = -1
+                while True:
+                    index = line.find(self.searchstring, index + 1)
+                    if index == -1:
+                        break
+                    term.e_select_text(index, row, index + searchlen, row)
 
 
 class TerminalBox(Gtk.Box, TerminalHolder):
