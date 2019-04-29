@@ -2,6 +2,16 @@
 Guake
 =====
 
+3.6.1
+=====
+
+Bug Fixes
+---------
+
+- Fix search box background so that it will follow current theme
+
+- Minor build system fixes
+
 3.6.0
 =====
 
