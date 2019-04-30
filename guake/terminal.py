@@ -95,8 +95,9 @@ class GuakeTerminal(Vte.Terminal):
         self.guake = guake
         self.configure_terminal()
         self.add_matches()
-        self.connect('button-press-event', self.button_press)
-        self.connect('child-exited', self.on_child_exited)
+        self.handler_ids = []
+        self.handler_ids.append(self.connect('button-press-event', self.button_press))
+        self.handler_ids.append(self.connect('child-exited', self.on_child_exited))
         self.matched_value = ''
         self.font_scale_index = 0
         self._pid = None
@@ -471,6 +472,7 @@ class GuakeTerminal(Vte.Terminal):
             os.kill(pid, signal.SIGHUP)
         except OSError:
             pass
+        return
         num_tries = 30
 
         while num_tries > 0:

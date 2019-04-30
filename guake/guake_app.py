@@ -267,6 +267,9 @@ class Guake(SimpleGladeApp):
 
         refresh_user_start(self.settings)
 
+        # Pending restore for terminal split after show-up
+        self.pending_restore_page_split = []
+
         # Restore tabs when startup
         if self.settings.general.get_boolean('restore-tabs-startup'):
             self.restore_tabs(suppress_notify=True)
@@ -638,6 +641,11 @@ class Guake(SimpleGladeApp):
 
         log.debug("Current window position: %r", self.window.get_position())
 
+        # Restore pending terminal split
+        for box, panes in self.pending_restore_page_split:
+            box.restore_box_layout(box.child, panes)
+        self.pending_restore_page_split = []
+
         self.execute_hook('show')
 
     def hide_from_remote(self):
@@ -961,6 +969,8 @@ class Guake(SimpleGladeApp):
     @save_tabs_when_changed
     def on_terminal_title_changed(self, vte, term):
         # box must be a page
+        if not term.get_parent():
+            return
         box = term.get_parent().get_root_box()
         use_vte_titles = self.settings.general.get_boolean('use-vte-titles')
         if not use_vte_titles:
@@ -1016,7 +1026,9 @@ class Guake(SimpleGladeApp):
 
     def terminal_spawned(self, notebook, terminal, pid):
         self.load_config()
-        terminal.connect('window-title-changed', self.on_terminal_title_changed, terminal)
+        terminal.handler_ids.append(
+            terminal.connect('window-title-changed', self.on_terminal_title_changed, terminal)
+        )
 
     @save_tabs_when_changed
     def add_tab(self, directory=None):
@@ -1158,8 +1170,10 @@ class Guake(SimpleGladeApp):
                 try:
                     page = nb.get_nth_page(index)
                     if page.child:
+                        panes = []
+                        page.save_box_layout(page.child, panes)
                         tabs.append({
-                            'directory': page.child.terminal.get_current_directory(),
+                            'panes': panes,
                             'label': nb.get_tab_text_index(index),
                             'custom_label_set': getattr(page, 'custom_label_set', False)
                         })
@@ -1213,9 +1227,19 @@ class Guake(SimpleGladeApp):
                 # NOTE: If frame implement in future, we will need to update this code
                 for tabs in frames:
                     for index, tab in enumerate(tabs):
-                        nb.new_page_with_focus(
-                            tab['directory'], tab['label'], tab['custom_label_set']
+                        directory = tab['panes'][0]['directory'] if len(
+                            tab.get('panes', [])
+                        ) == 1 else tab.get('directory', None)
+                        box, page_num, term = nb.new_page_with_focus(
+                            directory, tab['label'], tab['custom_label_set']
                         )
+                        if tab.get('panes', False):
+                            if directory:
+                                continue
+                            if self.window.get_property('visible'):
+                                box.restore_box_layout(box.child, tab['panes'])
+                            else:
+                                self.pending_restore_page_split.append((box, tab['panes']))
 
                     # Remove original pages in notebook
                     for i in range(current_pages):
@@ -1245,3 +1269,19 @@ class Guake(SimpleGladeApp):
             notifier.showMessage(_("Guake Terminal"), _("Your tabs has been restored!"), filename)
 
         log.info('Guake tabs restored from %s', session_file)
+
+    def print_page_layout(self):
+        nb = self.get_notebook()
+        page = nb.get_nth_page(nb.get_current_page())
+
+        layout = []
+        page.save_box_layout(page.get_child(), layout)
+        print(layout)
+
+    def restore_box_layout(self, layout):
+        nb = self.get_notebook()
+        page = nb.get_nth_page(nb.get_current_page())
+
+        # XXX: WAIT, what are you doing?
+        layout = eval(layout)
+        page.restore_box_layout(page.get_child(), layout)

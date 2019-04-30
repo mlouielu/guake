@@ -262,6 +262,7 @@ class TerminalNotebook(Gtk.Notebook):
         else:
             self.rename_page(page_num, label, user_set)
         terminal.grab_focus()
+        return box, page_num, terminal
 
     def rename_page(self, page_index, new_text, user_set=False):
         """Rename an already added page by its index. Use user_set to define
@@ -323,6 +324,8 @@ class TerminalNotebook(Gtk.Notebook):
         self.guake.restore_tabs()
 
     def on_restore_tabs_with_dialog(self, user_data):
+        self.on_restore_tabs(None)
+        return
         dialog = Gtk.MessageDialog(
             parent=self.guake.window,
             flags=Gtk.DialogFlags.MODAL,

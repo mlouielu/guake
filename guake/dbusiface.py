@@ -63,6 +63,14 @@ class DbusManager(dbus.service.Object):
         self.guake.hide_from_remote()
 
     @dbus.service.method(DBUS_NAME)
+    def print_page_layout(self):
+        self.guake.print_page_layout()
+
+    @dbus.service.method(DBUS_NAME, in_signature='s')
+    def restore_page_layout(self, layout):
+        self.guake.restore_box_layout(layout)
+
+    @dbus.service.method(DBUS_NAME)
     def fullscreen(self):
         self.guake.fullscreen()
 

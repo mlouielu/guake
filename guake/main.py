@@ -295,6 +295,14 @@ def main():
         help=_('Show support infomations')
     )
 
+    parser.add_option(
+        '--print-page-layout', dest='print_page_layout', action='store_true', default=False
+    )
+
+    parser.add_option(
+        '--restore-page-layout', dest='restore_page_layout', action='store', default=None
+    )
+
     # checking mandatory dependencies
     import gi
 
@@ -376,6 +384,14 @@ def main():
         already_running = False
 
     only_show_hide = True
+
+    if options.print_page_layout:
+        remote_object.print_page_layout()
+        sys.exit(0)
+
+    if options.restore_page_layout:
+        remote_object.restore_page_layout(options.restore_page_layout)
+        sys.exit(0)
 
     if options.fullscreen:
         remote_object.fullscreen()

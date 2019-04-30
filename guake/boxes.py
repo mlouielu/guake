@@ -1,4 +1,5 @@
 import logging
+import time
 
 from locale import gettext as _
 
@@ -192,6 +193,64 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
     def get_root_box(self):
         return self
 
+    def save_box_layout(self, box, panes):
+        if not box:
+            panes.append({'type': None, 'directory': None})
+            return
+        if isinstance(box, DualTerminalBox):
+            btype = 'dual' + ('_h' if box.orient is DualTerminalBox.ORIENT_V else '_v')
+            panes.append({'type': btype, 'directory': None})
+            self.save_box_layout(box.get_child1(), panes)
+            self.save_box_layout(box.get_child2(), panes)
+        elif isinstance(box, TerminalBox):
+            btype = 'term'
+            directory = box.terminal.get_current_directory()
+            panes.append({'type': btype, 'directory': directory})
+
+    def restore_box_layout(self, box, panes):
+        if not box or not isinstance(box, TerminalBox):
+            return
+
+        cur = panes.pop(0)
+        if cur['type'].startswith('dual'):
+            while True:
+                # UI didn't update, wait for it
+                alloc = box.get_allocation()
+                if alloc.width == 1 and alloc.height == 1:
+                    time.sleep(.01)
+                else:
+                    break
+
+                # Waiting for UI update..
+                while Gtk.events_pending():
+                    Gtk.main_iteration()
+
+            if cur['type'].endswith('v'):
+                box = box.split_v()
+            else:
+                box = box.split_h()
+            self.restore_box_layout(box.get_child1(), panes)
+            self.restore_box_layout(box.get_child2(), panes)
+        else:
+            old_term = box.terminal
+            # Remove signal handler of terminal
+            for i in old_term.handler_ids:
+                old_term.disconnect(i)
+            old_term.handler_ids = []
+
+            if box.terminal:
+                box.remove(box.scroll)
+                box.remove(box.terminal)
+                box.unset_terminal()
+
+            # Replace term in the TerminalBox
+            term = self.get_notebook().terminal_spawn(cur['directory'])
+            box.set_terminal(term)
+            self.get_notebook().terminal_attached(term)
+
+            # NOTE: Don't spawn too fast, it will go wrong
+            time.sleep(.02)
+
     def set_last_terminal_focused(self, terminal):
         self.last_terminal_focused = terminal
         self.get_notebook().set_last_terminal_focused(terminal)
@@ -312,10 +371,15 @@ class TerminalBox(Gtk.Box, TerminalHolder):
         if self.terminal is not None:
             raise RuntimeError("TerminalBox: terminal already set")
         self.terminal = terminal
-        self.terminal.connect("grab-focus", self.on_terminal_focus)
-        self.terminal.connect("button-press-event", self.on_button_press, None)
-        self.terminal.connect('child-exited', self.on_terminal_exited)
-
+        self.terminal.handler_ids.append(
+            self.terminal.connect("grab-focus", self.on_terminal_focus)
+        )
+        self.terminal.handler_ids.append(
+            self.terminal.connect("button-press-event", self.on_button_press, None)
+        )
+        self.terminal.handler_ids.append(
+            self.terminal.connect('child-exited', self.on_terminal_exited)
+        )
         self.pack_start(self.terminal, True, True, 0)
         self.terminal.show()
         self.add_scroll_bar()
@@ -324,9 +388,9 @@ class TerminalBox(Gtk.Box, TerminalHolder):
         """Packs the scrollbar.
         """
         adj = self.terminal.get_vadjustment()
-        scroll = Gtk.VScrollbar(adj)
-        scroll.show()
-        self.pack_start(scroll, False, False, 0)
+        self.scroll = Gtk.VScrollbar(adj)
+        self.scroll.show()
+        self.pack_start(self.scroll, False, False, 0)
 
     def get_terminal(self):
         return self.terminal
@@ -348,14 +412,15 @@ class TerminalBox(Gtk.Box, TerminalHolder):
         self.terminal = None
 
     def split_h(self):
-        self.split(DualTerminalBox.ORIENT_V)
+        return self.split(DualTerminalBox.ORIENT_V)
 
     def split_v(self):
-        self.split(DualTerminalBox.ORIENT_H)
+        return self.split(DualTerminalBox.ORIENT_H)
 
     def split(self, orientation):
         notebook = self.get_notebook()
-        parent = self.get_parent()
+        parent = self.get_parent()  # RootTerminalBox
+
         if orientation == DualTerminalBox.ORIENT_H:
             position = self.get_allocation().width / 2
         else:
@@ -372,6 +437,8 @@ class TerminalBox(Gtk.Box, TerminalHolder):
         dual_terminal_box.show()
         dual_terminal_box.show_all()
         notebook.terminal_attached(terminal)
+
+        return dual_terminal_box
 
     def get_guake(self):
         return self.get_parent().get_guake()
@@ -394,7 +461,9 @@ class TerminalBox(Gtk.Box, TerminalHolder):
     def on_terminal_focus(self, *args):
         self.get_root_box().set_last_terminal_focused(self.terminal)
 
-    def on_terminal_exited(self, *args):
+    def on_terminal_exited(self, terminal, status):
+        if not self.get_parent():
+            return
         self.get_parent().remove_dead_child(self)
 
     def on_button_press(self, target, event, user_data):
