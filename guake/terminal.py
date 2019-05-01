@@ -472,7 +472,13 @@ class GuakeTerminal(Vte.Terminal):
             os.kill(pid, signal.SIGHUP)
         except OSError:
             pass
+
+        # XXX: Leave it alone
+        # sys:1: Warning: GChildWatchSource: Exit status of a child process was requested but
+        #        ECHILD was received by waitpid(). See the documentation of g_child_watch_source_new()
+        #        for possible causes.
         return
+
         num_tries = 30
 
         while num_tries > 0:
