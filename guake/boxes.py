@@ -223,17 +223,14 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
         if cur['type'].startswith('dual'):
             while True:
                 if self.guake:
-                    # If Guake are not visible, we should pending the restore, then do the
-                    # restore when Guake is visible again.
+                    # If Guake are not visible, we should pending the restore into notebook,
+                    # then do the restore when Guake & this notebook is visible again.
                     #
                     # Otherwise we will stuck in the infinite loop, since new DualTerminalBox
                     # cannot get any allocation when Guake is invisible
-                    if (
-                        not self.guake.window.get_property('visible') or self.get_notebook() is
-                        not self.guake.notebook_manager.get_current_notebook()
-                    ):
+                    if not self.guake.window.get_property('visible'):
                         panes.insert(0, cur)
-                        self.guake._failed_restore_page_split.append((self, box, panes))
+                        self.get_notebook()._failed_restore_terminal_split.append((self, box, panes))
                         return
 
                 # UI didn't update, wait for it

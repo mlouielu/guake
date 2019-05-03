@@ -87,6 +87,21 @@ class TerminalNotebook(Gtk.Notebook):
         self.new_page_button.connect("clicked", self.on_new_tab)
         self.set_action_widget(self.new_page_button, Gtk.PackType.END)
 
+        # Pending restore for terminal split after show-up
+        #    [(RootTerminalBox, TerminalBox, panes), ...]
+        self.pending_restore_terminal_split = []
+        self._failed_restore_terminal_split = []
+
+    def restore_pending_terminal_split(self):
+        self.pending_restore_terminal_split = self._failed_restore_terminal_split
+        self._failed_restore_terminal_split = []
+        for root, box, panes in self.pending_restore_terminal_split:
+            if self.guake.window.get_property('visible'):
+                root.restore_box_layout(box, panes)
+            else:
+                # Consider failed if the window is not visible
+                self._failed_restore_terminal_split.append((root, box, panes))
+
     def attach_guake(self, guake):
         self.guake = guake
 
@@ -403,7 +418,7 @@ class NotebookManager(GObject.Object):
             notebook.last_terminal_focused.grab_focus()
 
         # Restore pending page terminal split
-        notebook.guake.restore_pending_terminal_split()
+        notebook.restore_pending_terminal_split()
 
     def get_notebooks(self):
         return self.notebooks

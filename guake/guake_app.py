@@ -177,11 +177,6 @@ class Guake(SimpleGladeApp):
         self.mainframe = self.get_widget('mainframe')
         self.mainframe.remove(self.get_widget('notebook-teminals'))
 
-        # Pending restore for terminal split after show-up
-        #     [(RootTerminalBox, TerminaBox, panes), ...]
-        self.pending_restore_page_split = []
-        self._failed_restore_page_split = []
-
         # Workspace tracking
         self.notebook_manager = NotebookManager(
             self.window, self.mainframe,
@@ -571,21 +566,6 @@ class Guake(SimpleGladeApp):
             return True
         return False
 
-    def restore_pending_terminal_split(self):
-        # Restore pending terminal split
-        # XXX: Consider refactor how to handle failed restore page split
-        self.pending_restore_page_split = self._failed_restore_page_split
-        self._failed_restore_page_split = []
-        for root, box, panes in self.pending_restore_page_split:
-            if (
-                self.window.get_property('visible') and
-                root.get_notebook() == self.notebook_manager.get_current_notebook()
-            ):
-                root.restore_box_layout(box, panes)
-            else:
-                # Consider failed if the window is not visible
-                self._failed_restore_page_split.append((root, box, panes))
-
     def show(self):
         """Shows the main window and grabs the focus on it.
         """
@@ -658,7 +638,10 @@ class Guake(SimpleGladeApp):
         self.settings.styleBackground.triggerOnChangedValue(self.settings.styleBackground, 'color')
 
         log.debug("Current window position: %r", self.window.get_position())
-        self.restore_pending_terminal_split()
+
+        # Restore current notebook's pending terminal split
+        self.notebook_manager.get_current_notebook().restore_pending_terminal_split()
+
         self.execute_hook('show')
 
     def hide_from_remote(self):
@@ -1264,12 +1247,14 @@ class Guake(SimpleGladeApp):
         self.settings.general.set_boolean('save-tabs-when-changed', False)
 
         # Restore all tabs for all workspaces
-        self.pending_restore_page_split = []
-        self._failed_restore_page_split = []
         try:
             for key, frames in config['workspace'].items():
                 nb = self.notebook_manager.get_notebook(int(key))
                 current_pages = nb.get_n_pages()
+
+                # Reset pending restore terminal split
+                nb.pending_restore_terminal_split = []
+                nb._failed_restore_terminal_split = []
 
                 # Restore each frames' tabs from config
                 # NOTE: If frame implement in future, we will need to update this code
