@@ -150,22 +150,37 @@ class HidePrevention():
 
 
 class FullscreenManager():
+    FULLSCREEN_ATTR = 'is_fullscreen'
 
-    def __init__(self, settings, window):
+    def __init__(self, settings, window, guake=None):
         self.settings = settings
         self.window = window
-        self.is_in_fullscreen = False
+        self.guake = guake
+        self.window_state = None
 
     def is_fullscreen(self):
-        return getattr(self.window, 'is_fullscreen', False)
+        return getattr(self.window, self.FULLSCREEN_ATTR, False)
+
+    def set_window_state(self, window_state):
+        self.window_state = window_state
+        setattr(self.window, self.FULLSCREEN_ATTR, bool(window_state & Gdk.WindowState.FULLSCREEN))
+
+        if not window_state & Gdk.WindowState.WITHDRAWN:
+            if self.is_fullscreen():
+                self.fullscreen()
+            else:
+                self.unfullscreen()
 
     def fullscreen(self):
         self.window.fullscreen()
-        setattr(self.window, 'is_fullscreen', True)
+        setattr(self.window, self.FULLSCREEN_ATTR, True)
+        self.toggle_fullscreen_hide_tabbar()
 
     def unfullscreen(self):
-        setattr(self.window, 'is_fullscreen', False)
         self.window.unfullscreen()
+        setattr(self.window, self.FULLSCREEN_ATTR, False)
+        self.toggle_fullscreen_hide_tabbar()
+
         # FIX to unfullscreen after show, fullscreen, hide, unfullscreen
         # (unfullscreen breaks/does not shrink window size)
         RectCalculator.set_final_window_rect(self.settings, self.window)
@@ -175,6 +190,16 @@ class FullscreenManager():
             self.unfullscreen()
         else:
             self.fullscreen()
+
+    def toggle_fullscreen_hide_tabbar(self):
+        if self.is_fullscreen():
+            if self.settings.general.get_boolean('fullscreen-hide-tabbar'):
+                if self.guake and self.guake.notebook_manager:
+                    self.guake.notebook_manager.set_notebooks_tabbar_visible(False)
+        else:
+            if self.guake and self.guake.notebook_manager:
+                v = self.settings.general.get_boolean('window-tabbar')
+                self.guake.notebook_manager.set_notebooks_tabbar_visible(v)
 
 
 class RectCalculator():
